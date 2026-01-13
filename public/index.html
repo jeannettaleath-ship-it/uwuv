@@ -1,0 +1,87 @@
+here<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام التحكم الموحد</title>
+    <style>
+        body { background: #000; color: #fff; font-family: sans-serif; text-align: center; margin: 0; padding: 20px; }
+        .box { background: #1a1a1a; padding: 20px; border-radius: 15px; margin-top: 50px; }
+        .btn { display: block; width: 100%; padding: 15px; margin: 10px 0; border: none; border-radius: 8px; font-size: 18px; cursor: pointer; color: white; }
+        .target-btn { background: #e74c3c; }
+        .monitor-btn { background: #2ecc71; }
+        #screen-view { width: 100%; max-width: 400px; border: 2px solid #333; display: none; margin-top: 20px; }
+        #status { color: #aaa; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+<div id="main-menu" class="box">
+    <h2>نظام التحكم عن بُعد</h2>
+    <button class="btn target-btn" onclick="setupTarget()">هذا هو الهاتف (المستهدف)</button>
+    <button class="btn monitor-btn" onclick="setupMonitor()">فتح لوحة (المراقبة)</button>
+</div>
+
+<div id="display-area" style="display:none;">
+    <h3 id="mode-title">جاري العمل...</h3>
+    <p id="status">بانتظار الإشارة...</p>
+    <img id="screen-view" src="">
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    const socket = io();
+    const mainMenu = document.getElementById('main-menu');
+    const displayArea = document.getElementById('display-area');
+    const screenView = document.getElementById('screen-view');
+    const status = document.getElementById('status');
+
+    // --- إعداد الهاتف المستهدف ---
+    async function setupTarget() {
+        mainMenu.style.display = 'none';
+        displayArea.style.display = 'block';
+        document.getElementById('mode-title').innerText = "وضع البث (Target)";
+        
+        try {
+            const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 15 } });
+            const video = document.createElement('video');
+            video.srcObject = stream;
+            video.play();
+
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+
+            status.innerText = "✅ البث يعمل الآن.. سيستمر حتى لو انقطع النت";
+
+            setInterval(() => {
+                if (socket.connected) {
+                    canvas.width = 400; canvas.height = 700;
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    socket.emit('screen_frame', canvas.toDataURL('image/jpeg', 0.5));
+                }
+            }, 500);
+        } catch (err) {
+            alert("خطأ: يجب الموافقة على مشاركة الشاشة");
+            location.reload();
+        }
+    }
+
+    // --- إعداد لوحة المراقبة ---
+    function setupMonitor() {
+        mainMenu.style.display = 'none';
+        displayArea.style.display = 'block';
+        screenView.style.display = 'inline-block';
+        document.getElementById('mode-title').innerText = "لوحة التحكم (Monitor)";
+
+        socket.on('update_monitor', (data) => {
+            screenView.src = data;
+            status.innerText = "✅ متصل - بث حي";
+        });
+
+        socket.on('disconnect', () => {
+            status.innerText = "❌ انقطع الاتصال.. بانتظار عودة الجهاز";
+        });
+    }
+</script>
+</body>
+</html>
